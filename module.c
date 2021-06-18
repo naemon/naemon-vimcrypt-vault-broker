@@ -82,9 +82,8 @@ unsigned char *sha256_key(char *string, char *salt, int salt_len) {
 }
 
 /* read raw encrypted vault file data */
-int read_raw_vault(char **buffer, char **salt) {
+int read_raw_vault(char **buffer, int *buffer_size, char **salt) {
 	FILE *fp;
-	long lSize;
 
 	fp = fopen(vault_file, "rb");
 	if(!fp) {
@@ -93,10 +92,10 @@ int read_raw_vault(char **buffer, char **salt) {
 	}
 
 	fseek(fp , 0L , SEEK_END);
-	lSize = ftell(fp) - 19; // 12 bytes vimcrypt header, 8 byte salt - 1 byte for the null at the end
+	*buffer_size = ftell(fp) - 20; // 12 bytes vimcrypt header, 8 byte salt
 	rewind(fp);
 
-	*buffer = nm_malloc(lSize);
+	*buffer = nm_malloc(*buffer_size);
 	if(1 != fread(*buffer , 9, 1 , fp)) {
 		nm_log(NSLOG_INFO_MESSAGE, "Error: cannot read vault file %s: %d - %s", vault_file, errno, strerror(errno));
 		fclose(fp);
@@ -134,7 +133,7 @@ int read_raw_vault(char **buffer, char **salt) {
 	}
 
 	/* copy the remaining file into the buffer */
-	if(1 != fread(*buffer , lSize -1, 1 , fp)) {
+	if(1 != fread(*buffer , *buffer_size, 1 , fp)) {
 		nm_log(NSLOG_INFO_MESSAGE, "Error: cannot read vault file %s: %d - %s", vault_file, errno, strerror(errno));
 		fclose(fp);
 		free(*buffer);
@@ -142,6 +141,7 @@ int read_raw_vault(char **buffer, char **salt) {
 		return ERROR;
 	}
 	fclose(fp);
+	return(OK);
 }
 
 /* returns blowfish 2 handle */
@@ -166,29 +166,30 @@ void xor_bytes(char *dst, char *b1, char *b2, int size) {
 }
 
 /* decrypt vault content */
-void decrypt_vault(char **decrypted, char *encrypted, char *salt) {
+void decrypt_vault(char **decrypted, char *encrypted, int enc_size, char *salt) {
 	BF_KEY *bfkey;
-	char *block0, *block1;
+	char block0[8], block1[8];
 	int size, offset;
 
-	*decrypted = malloc(strlen(encrypted)+1);
+	int dec_size = enc_size - 7; // -8 bytes from seed +1 for ending null byte
+	*decrypted = malloc(dec_size);
 
 	bfkey = bfopen(salt, strlen(salt));
 
-	size = strlen(encrypted);
-	block0 = encrypted;
-	block1 = encrypted + 8;
+	size = enc_size;
+	memcpy(block0, encrypted, 8);
+	memcpy(block1,encrypted + 8, 8);
 	offset = 0;
 	while(size > 8) {
 		BF_encrypt((unsigned int *)block0, bfkey);
 		xor_bytes(block0, block0, block1, 8);
 		size = size - 8;
 		memcpy(*decrypted+offset, block0, size < 8 ? size : 8);
-		block0 = block1;
-		block1 = block1 + 8;
 		offset = offset + 8;
+		memcpy(block0, block1, 8);
+		memcpy(block1, encrypted+offset+8, 8);
 	}
-	decrypted[offset+1] = '\0';
+	(*decrypted)[dec_size-1] = '\0';
 	return;
 }
 
@@ -198,14 +199,14 @@ int parse_vault(void) {
 	char *line, *temp, *temp_ptr;
 	char *variable = NULL;
 	char *value = NULL;
-	int user_index = 0;
 	int macros_found = 0;
+	int enc_size = 0;
 
-	if(read_raw_vault(&encrypted, &salt) != OK) {
+	if(read_raw_vault(&encrypted, &enc_size, &salt) != OK) {
 		return ERROR;
 	}
 
-	decrypt_vault(&decrypted, encrypted, salt);
+	decrypt_vault(&decrypted, encrypted, enc_size, salt);
 	free(encrypted);
 
 	macro_store = kvvec_create(0);
@@ -240,15 +241,12 @@ int parse_vault(void) {
 		if (variable[0] == '$' && variable[strlen(variable) - 1] == '$') {
 			/* $VAULTx$ macro declarations */
 			if (strstr(variable, "$VAULT") == variable  && strlen(variable) > 6) {
-				user_index = atoi(variable + 6) - 1;
-				if (user_index >= 0) {
-					variable[strlen(variable) - 1] = '\0';
-					kvvec_addkv_str(macro_store, strdup(variable+1), strdup(value));
-					nm_free(variable);
-					nm_free(value);
-					macros_found++;
-					continue;
-				}
+				variable[strlen(variable) - 1] = '\0';
+				kvvec_addkv_str(macro_store, strdup(variable+1), strdup(value));
+				nm_free(variable);
+				nm_free(value);
+				macros_found++;
+				continue;
 			}
 		}
 		nm_free(variable);

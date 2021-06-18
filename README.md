@@ -67,7 +67,10 @@ etc/naemon/vault.cfg:
 # comments start with a hash sign
 $VAULT1$=test
 $VAULT2$=example
+$VAULT:EXAMPLE$=not only numbers...
 ```
+
+Note: unlike the user macros, macro definitions are _not_ limited to numbers. Human readable names can be used as well.
 
 Using the macros
 ----------------
@@ -77,6 +80,6 @@ Vault macros can then be used like the user macros, ex.:
 ```
 define command {
     command_name    check_http
-    command_line    $USER1$/check_http -a "$VAULT1$" ...
+    command_line    $USER1$/check_http -a "$VAULT1$" "$VAULT:EXAMPLE$" ...
 }
 ```
