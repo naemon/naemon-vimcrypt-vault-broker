@@ -41,7 +41,7 @@ int parse_args(char *arg) {
 	char *arg_value;
 	arg = strtok(arg, " \t");
 	while(arg != NULL) {
-		switch (getsubopt (&arg, module_opts, &arg_value)) {
+		switch (getsubopt (&arg, (char * const* restrict)module_opts, &arg_value)) {
 			case VAULT_FILE:
 				vault_file = arg_value;
 				break;
@@ -280,7 +280,7 @@ int nebmodule_init(__attribute__((unused)) int flags, char *arg, nebmodule *hand
 		master_password = kvvec_fetch_str_str(global_store, master_password_store_key);
 
 	if(master_password == NULL) {
-		master_password = getpass("Enter Vault Master Password: ");
+		master_password = getpass("Enter vault master password: ");
 		strip(master_password);
 		if(strlen(master_password) == 0) {
 			nm_log(NSLOG_INFO_MESSAGE, "Error: no master password given");

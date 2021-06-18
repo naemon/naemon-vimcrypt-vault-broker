@@ -1,4 +1,3 @@
-/loadme.cfg
 /.deps
 /.libs
 /Makefile
@@ -20,7 +19,7 @@
 /m4/
 /missing
 /stamp-h1
-qh-connect
+/ar-lib
 
 # Prerequisites
 *.d
