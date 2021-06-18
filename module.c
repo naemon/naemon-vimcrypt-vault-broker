@@ -199,6 +199,7 @@ int parse_vault(void) {
 	char *variable = NULL;
 	char *value = NULL;
 	int user_index = 0;
+	int macros_found = 0;
 
 	if(read_raw_vault(&encrypted, &salt) != OK) {
 		return ERROR;
@@ -245,6 +246,7 @@ int parse_vault(void) {
 					kvvec_addkv_str(macro_store, strdup(variable+1), strdup(value));
 					nm_free(variable);
 					nm_free(value);
+					macros_found++;
 					continue;
 				}
 			}
@@ -255,8 +257,13 @@ int parse_vault(void) {
 		return ERROR;
 
 	} while ((line = strtok_r(NULL, "\n", &temp)) != NULL);
-
 	free(decrypted);
+
+	if(macros_found == 0) {
+		nm_log(NSLOG_CONFIG_ERROR, "Error: no macros found in %s, wrong password?", vault_file);
+		return ERROR;
+	}
+
 	return OK;
 }
 
