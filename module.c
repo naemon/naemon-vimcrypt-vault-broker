@@ -31,10 +31,8 @@ static int handle_vault_macro(int cb, void *_ds) {
 	if(value != NULL) {
 		nm_free(ds->value);
 		ds->value = strdup(value);
-		nm_log(NSLOG_INFO_MESSAGE, "vault macro %s requested -> %s", ds->macro_name, value);
 		return OK;
 	}
-	nm_log(NSLOG_INFO_MESSAGE, "unknown vault macro %s requested", ds->macro_name);
 	return OK;
 }
 
@@ -51,14 +49,14 @@ int parse_args(char *arg) {
 				master_password = arg_value;
 				break;
 			default:
-				nm_log(NSLOG_INFO_MESSAGE, "ERROR: unknown module argument: %s", arg_value);
+				nm_log(NSLOG_INFO_MESSAGE, "Error: unknown module argument: %s", arg_value);
 				return ERROR;
 		}
 		arg = strtok(NULL, " \t");
 	}
 
 	if(vault_file == NULL) {
-		nm_log(NSLOG_INFO_MESSAGE, "ERROR: 'vault' is a required argument");
+		nm_log(NSLOG_INFO_MESSAGE, "Error: 'vault' is a required argument");
 		return ERROR;
 	}
 }
@@ -90,7 +88,7 @@ int read_raw_vault(char **buffer, char **salt) {
 
 	fp = fopen(vault_file, "rb");
 	if(!fp) {
-		nm_log(NSLOG_INFO_MESSAGE, "ERROR: cannot read vault file %s: %d - %s", vault_file, errno, strerror(errno));
+		nm_log(NSLOG_INFO_MESSAGE, "Error: cannot read vault file %s: %d - %s", vault_file, errno, strerror(errno));
 		return ERROR;
 	}
 
@@ -100,46 +98,47 @@ int read_raw_vault(char **buffer, char **salt) {
 
 	*buffer = nm_malloc(lSize);
 	if(1 != fread(*buffer , 9, 1 , fp)) {
-	nm_log(NSLOG_INFO_MESSAGE, "ERROR: buffer: %s", *buffer);
-		nm_log(NSLOG_INFO_MESSAGE, "ERROR: cannot read vault file %s: %d - %s", vault_file, errno, strerror(errno));
+		nm_log(NSLOG_INFO_MESSAGE, "Error: cannot read vault file %s: %d - %s", vault_file, errno, strerror(errno));
 		fclose(fp);
 		free(*buffer);
 		return ERROR;
 	}
 	if(strncmp("VimCrypt~", *buffer, 9) != 0) {
+		nm_log(NSLOG_INFO_MESSAGE, "Error: file %s is not a vim crypted file.", vault_file);
+		fclose(fp);
 		free(*buffer);
-		nm_log(NSLOG_INFO_MESSAGE, "ERROR: file %s is not a vim crypted file.", vault_file);
 		return ERROR;
 	}
 
 	if(1 != fread(*buffer , 3, 1 , fp)) {
+		nm_log(NSLOG_INFO_MESSAGE, "Error: cannot read vault file %s: %d - %s", vault_file, errno, strerror(errno));
 		fclose(fp);
 		free(*buffer);
-		nm_log(NSLOG_INFO_MESSAGE, "ERROR: cannot read vault file %s: %d - %s", vault_file, errno, strerror(errno));
 		return ERROR;
 	}
 	if(strncmp("03!", *buffer, 3) != 0) {
+		nm_log(NSLOG_INFO_MESSAGE, "Error: %s uses unsupported crypt method, only blowfish2 is supported.", vault_file);
+		fclose(fp);
 		free(*buffer);
-		nm_log(NSLOG_INFO_MESSAGE, "ERROR: %s uses unsupported crypt method, only blowfish2 is supported.", vault_file);
 		return ERROR;
 	}
 
 	/* read 8 bytes of salt */
 	*salt = nm_malloc(8);
 	if(1 != fread(*salt , 8, 1 , fp)) {
+		nm_log(NSLOG_INFO_MESSAGE, "Error: cannot read vault file %s: %d - %s", vault_file, errno, strerror(errno));
 		fclose(fp);
 		free(*buffer);
 		free(*salt);
-		nm_log(NSLOG_INFO_MESSAGE, "ERROR: cannot read vault file %s: %d - %s", vault_file, errno, strerror(errno));
 		return ERROR;
 	}
 
 	/* copy the remaining file into the buffer */
 	if(1 != fread(*buffer , lSize -1, 1 , fp)) {
+		nm_log(NSLOG_INFO_MESSAGE, "Error: cannot read vault file %s: %d - %s", vault_file, errno, strerror(errno));
 		fclose(fp);
 		free(*buffer);
 		free(*salt);
-		nm_log(NSLOG_INFO_MESSAGE, "ERROR: cannot read vault file %s: %d - %s", vault_file, errno, strerror(errno));
 		return ERROR;
 	}
 	fclose(fp);
@@ -246,7 +245,6 @@ int parse_vault(void) {
 				if (user_index >= 0) {
 					variable[strlen(variable) - 1] = '\0';
 					kvvec_addkv_str(macro_store, strdup(variable+1), strdup(value));
-					nm_log(NSLOG_INFO_MESSAGE, "vault macro set %s -> %s", variable, value);
 					nm_free(variable);
 					nm_free(value);
 					continue;
@@ -274,7 +272,7 @@ int nebmodule_init(__attribute__((unused)) int flags, char *arg, nebmodule *hand
 	if(parse_args(arg) != OK)
 		return ERROR;
 
-	nm_log(NSLOG_INFO_MESSAGE, "vault module loaded %s", vault_file);
+	nm_log(NSLOG_INFO_MESSAGE, "vault module loaded wth vault %s", vault_file);
 
 	global_store = get_global_store();
 
@@ -285,7 +283,7 @@ int nebmodule_init(__attribute__((unused)) int flags, char *arg, nebmodule *hand
 		master_password = getpass("Enter Vault Master Password: ");
 		strip(master_password);
 		if(strlen(master_password) == 0) {
-			nm_log(NSLOG_INFO_MESSAGE, "ERROR: no master password given");
+			nm_log(NSLOG_INFO_MESSAGE, "Error: no master password given");
 			return ERROR;
 		}
 		kvvec_addkv_str(global_store, master_password_store_key, (char *)mkstr("%s", master_password));
