@@ -168,7 +168,6 @@ void xor_bytes(char *dst, char *b1, char *b2, int size) {
 /* decrypt vault content */
 void decrypt_vault(char **decrypted, char *encrypted, char *salt) {
 	BF_KEY *bfkey;
-	// TODO: make them char[8]
 	char *block0, *block1;
 	int size, offset;
 
@@ -182,7 +181,6 @@ void decrypt_vault(char **decrypted, char *encrypted, char *salt) {
 	offset = 0;
 	while(size > 8) {
 		BF_encrypt((unsigned int *)block0, bfkey);
-		// TODO: check if size is < 8
 		xor_bytes(block0, block0, block1, 8);
 		size = size - 8;
 		memcpy(*decrypted+offset, block0, size < 8 ? size : 8);
@@ -258,7 +256,6 @@ int parse_vault(void) {
 
 	} while ((line = strtok_r(NULL, "\n", &temp)) != NULL);
 
-
 	free(decrypted);
 	return OK;
 }
@@ -276,10 +273,15 @@ int nebmodule_init(__attribute__((unused)) int flags, char *arg, nebmodule *hand
 
 	global_store = get_global_store();
 
+	/* try using master password from environment */
+	if(master_password == NULL)
+		master_password = getenv("NAEMON_VIM_MASTER_PASSWORD");
+
 	if(master_password == NULL)
 		master_password = kvvec_fetch_str_str(global_store, master_password_store_key);
 
 	if(master_password == NULL) {
+		printf("\n");
 		master_password = getpass("Enter vault master password: ");
 		strip(master_password);
 		if(strlen(master_password) == 0) {

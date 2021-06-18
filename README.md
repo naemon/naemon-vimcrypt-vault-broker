@@ -39,6 +39,10 @@ Module arguments are:
   - `vault`: sets path to vim crypted file.
   - `password`: sets the master password (not recommended)
 
+Environment variables:
+
+  - `NAEMON_VIM_MASTER_PASSWORD`: set the master password from the environment
+
 Initial Vault Creation
 ----------------------
 
