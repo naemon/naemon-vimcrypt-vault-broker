@@ -50,10 +50,10 @@ Create a new file with vim, set the cryptmethod to blowfish2 (this is the only
 supported method) and save with `:X`
 
 ```
-  %> vim etc/naemon/vault.cfg
-  :set cm=blowfish2
-  :X
+  %> vim -x -c "set cm=blowfish2" etc/naemon/vault.cfg
   <enter password twice>
+  <add at least one comment or macro>
+  :wq
 ```
 
 After the initial creation, the file can simply be edited with `vim <file>` and
