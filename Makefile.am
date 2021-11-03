@@ -4,6 +4,7 @@ ACLOCAL_AMFLAGS = -I m4
 
 pkglib_LTLIBRARIES = naemon_vimcrypt.la
 
+EXTRA_DIST = README.md
 bin_PROGRAMS =
 naemon_vimcrypt_la_LDFLAGS = -module -avoid-version -shared $(NAEMON_LIBS) -lssl
 naemon_vimcrypt_la_CFLAGS = $(AM_CFLAGS)
