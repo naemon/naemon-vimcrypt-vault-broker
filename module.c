@@ -174,7 +174,7 @@ void decrypt_vault(char **decrypted, char *encrypted, int enc_size, char *salt) 
 	int dec_size = enc_size - 7; // -8 bytes from seed +1 for ending null byte
 	*decrypted = malloc(dec_size);
 
-	bfkey = bfopen(salt, strlen(salt));
+	bfkey = bfopen(salt, 8);
 
 	size = enc_size;
 	memcpy(block0, encrypted, 8);
