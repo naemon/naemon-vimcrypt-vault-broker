@@ -12,6 +12,7 @@ BuildRoot: %{_tmppath}/naemon-%{version}-%{release}
 BuildRequires: naemon-devel
 BuildRequires: autoconf
 BuildRequires: automake
+BuildRequires: libtool
 BuildRequires: openssl-devel
 BuildRequires: gcc-c++
 
