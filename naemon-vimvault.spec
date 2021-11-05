@@ -38,7 +38,7 @@ test -f configure || ./autogen.sh
 %{__make} install DESTDIR="%{buildroot}"
 
 # We don't really want to distribute this
-rm -f %{buildroot}%{_libdir}/naemon/naemon-vimvault/naemon-vimvault.la
+rm %{buildroot}%{_libdir}/naemon/naemon-vimvault/naemon_vimvault.la
 
 %clean
 %{__rm} -rf %{buildroot}
@@ -56,7 +56,7 @@ exit 0
 
 %files
 %attr(0755,naemon,naemon) %dir %{_libdir}/naemon/naemon-vimvault
-%attr(0644,root,root) %{_libdir}/naemon/naemon-vimvault/naemon-vimvault.so
+%attr(0644,root,root) %{_libdir}/naemon/naemon-vimvault/naemon_vimvault.so
 %if 0%{?suse_version} >= 1315
 %attr(0755,naemon,naemon) %dir %{_sysconfdir}/naemon/
 %attr(0755,naemon,naemon) %dir %{_sysconfdir}/naemon/module-conf.d/

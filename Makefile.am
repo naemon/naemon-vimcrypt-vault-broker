@@ -2,7 +2,7 @@ AM_CFLAGS += $(CFLAGS) $(naemon_CFLAGS)
 AM_CPPFLAGS += $(CPPFLAGS)
 ACLOCAL_AMFLAGS = -I m4
 
-pkglib_LTLIBRARIES = naemon_vimcrypt.la
+pkglib_LTLIBRARIES = naemon_vimvault.la
 
 EXTRA_DIST = README.md \
              naemon-vimvault.spec \
@@ -11,14 +11,14 @@ EXTRA_DIST = README.md \
              vimvault.cfg.in
 
 bin_PROGRAMS =
-naemon_vimcrypt_la_LDFLAGS = -module -avoid-version -shared $(NAEMON_LIBS) -lssl -lcrypto
-naemon_vimcrypt_la_CFLAGS = $(AM_CFLAGS) $(NAEMON_CFLAGS)
-naemon_vimcrypt_la_CPPFLAGS = $(AM_CPPFLAGS)
+naemon_vimvault_la_LDFLAGS = -module -avoid-version -shared $(NAEMON_LIBS) -lssl -lcrypto
+naemon_vimvault_la_CFLAGS = $(AM_CFLAGS) $(NAEMON_CFLAGS)
+naemon_vimvault_la_CPPFLAGS = $(AM_CPPFLAGS)
 
-naemon_vimcrypt_sources = module.c
+naemon_vimvault_sources = module.c
 naemonconf_DATA = vimvault.cfg
 
-naemon_vimcrypt_la_SOURCES = $(naemon_vimcrypt_sources)
+naemon_vimvault_la_SOURCES = $(naemon_vimvault_sources)
 
 CLEANFILES = $(BUILT_SOURCES)
 

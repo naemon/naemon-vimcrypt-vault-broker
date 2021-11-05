@@ -16,7 +16,7 @@ override_dh_auto_install:
 	dh_auto_install
 	# get rid of dependency_libs in la files, see https://wiki.debian.org/ReleaseGoals/LAFileRemoval
 	sed -i "/dependency_libs/ s/'.*'/''/" `find . -name '*.la'`
-	rm debian/naemon-vimvault/usr/lib/naemon/naemon-vimvault/naemon_vimcrypt.la
+	rm debian/naemon-vimvault/usr/lib/naemon/naemon-vimvault/naemon_vimvault.la
 
 override_dh_gencontrol:
 	dh_gencontrol
