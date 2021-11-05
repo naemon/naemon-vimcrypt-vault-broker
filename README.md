@@ -7,6 +7,15 @@ file.
 Installation
 ============
 
+When using the OBS repository from https://build.opensuse.org/project/show/home:naemon you can simply
+use yum or apt to install this module. Otherwise build it from source.
+
+```bash
+  #> yum install naemon-vimvault
+  or
+  #> apt-get install naemon-vimvault
+```
+
 Requirements
 ------------
 
