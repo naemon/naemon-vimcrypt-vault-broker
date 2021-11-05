@@ -1,0 +1,26 @@
+#!/usr/bin/make -f
+# debian/rules makefile for naemon-vimvault
+
+export DH_VERBOSE=1
+DESTDIR=$(CURDIR)/debian/tmp/
+
+override_dh_auto_configure:
+	test -f configure || ./autogen.sh
+	dh_auto_configure -- --prefix=/usr \
+				--bindir="/usr/bin" \
+				--libdir="/usr/lib/naemon" \
+				--with-naemon-config-dir="/etc/naemon/module-conf.d" \
+				--mandir="/usr/share/man"
+
+override_dh_auto_install:
+	dh_auto_install
+	# get rid of dependency_libs in la files, see https://wiki.debian.org/ReleaseGoals/LAFileRemoval
+	sed -i "/dependency_libs/ s/'.*'/''/" `find . -name '*.la'`
+	rm debian/naemon-vimvault/usr/lib/naemon/naemon-vimvault/naemon_vimcrypt.la
+
+override_dh_gencontrol:
+	dh_gencontrol
+
+%:
+	dh $@
+
