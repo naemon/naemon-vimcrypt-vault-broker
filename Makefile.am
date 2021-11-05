@@ -6,7 +6,7 @@ pkglib_LTLIBRARIES = naemon_vimcrypt.la
 
 EXTRA_DIST = README.md
 bin_PROGRAMS =
-naemon_vimcrypt_la_LDFLAGS = -module -avoid-version -shared $(NAEMON_LIBS) -lssl
+naemon_vimcrypt_la_LDFLAGS = -module -avoid-version -shared $(NAEMON_LIBS) -lssl -lcrypto
 naemon_vimcrypt_la_CFLAGS = $(AM_CFLAGS)
 naemon_vimcrypt_la_CPPFLAGS = $(AM_CPPFLAGS)
 
