@@ -59,6 +59,7 @@ int parse_args(char *arg) {
 		nm_log(NSLOG_INFO_MESSAGE, "Error: 'vault' is a required argument");
 		return ERROR;
 	}
+	return OK;
 }
 
 /* convert 32byte into hex string */
