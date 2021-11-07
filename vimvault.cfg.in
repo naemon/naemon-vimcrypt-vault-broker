@@ -1,2 +1,2 @@
 # Naemon broker config
-#broker_module=@pkglibdir@/vimvault.so @brokeroptions@
+#broker_module=@pkglibdir@/naemon_vimvault.so @brokeroptions@
