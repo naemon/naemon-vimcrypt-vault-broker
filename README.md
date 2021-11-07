@@ -81,6 +81,23 @@ $VAULT:EXAMPLE$=not only numbers...
 
 Note: unlike the user macros, macro definitions are _not_ limited to numbers. Human readable names can be used as well.
 
+Using with Systemd
+------------------
+Naemon will ask for the master password upon startup. This does not work with
+systemd, so we need to change the unit file, so it can ask for a password and
+put that into a environment variable:
+
+Edit the systemd unit file:
+```
+  #> systemctl edit naemon
+```
+
+Add this to make systemd ask for a password:
+```
+[Service]
+ExecStartPre=/usr/bin/bash -c "/usr/bin/systemctl set-environment NAEMON_VIM_MASTER_PASSWORD=$(systemd-ask-password 'Naemon Vault Master Password:')"
+```
+
 Using the macros
 ----------------
 
