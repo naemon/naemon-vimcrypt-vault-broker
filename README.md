@@ -96,6 +96,7 @@ Add this to make systemd ask for a password:
 ```
 [Service]
 ExecStartPre=/usr/bin/bash -c "/usr/bin/systemctl set-environment NAEMON_VIM_MASTER_PASSWORD=$(systemd-ask-password 'Naemon Vault Master Password:')"
+ExecStartPost=/usr/bin/bash -c "/usr/bin/systemctl unset-environment NAEMON_VIM_MASTER_PASSWORD"
 ```
 
 Using the macros
