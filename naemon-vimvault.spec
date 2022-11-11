@@ -1,6 +1,6 @@
 Summary: Naemon VimVault Eventbroker Module
 Name: naemon-vimvault
-Version: 1.3.1
+Version: 1.4.0
 Release: 0
 License: GPL-3.0-or-later
 Group: Applications/System
