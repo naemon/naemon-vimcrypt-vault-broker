@@ -4,7 +4,7 @@ Version: 1.4.0
 Release: 0
 License: GPL-3.0-or-later
 Group: Applications/System
-URL: http://www.naemon.org/
+URL: https://www.naemon.io/
 Packager: Naemon Core Development Team <naemon-dev@monitoring-lists.org>
 Vendor: Naemon Core Development Team
 Source0: https://github.com/naemon/naemon-vimcrypt-vault-broker/archive/naemon-vimvault-%{version}.tar.gz

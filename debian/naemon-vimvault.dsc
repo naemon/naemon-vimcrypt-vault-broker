@@ -3,7 +3,7 @@ Source: naemon-vimvault
 Architecture: any
 Version:
 Maintainer: Naemon Core Development Team <naemon-dev@monitoring-lists.org>
-Homepage: http://www.naemon.org
+Homepage: https://www.naemon.io
 Bugs: https://github.com/naemon/naemon-vimcrypt-vault-broker/issues
 Vcs-Browser: https://github.com/naemon/naemon-vimcrypt-vault-broker
 Vcs-Git: https://github.com/naemon/naemon-vimcrypt-vault-broker/issues
