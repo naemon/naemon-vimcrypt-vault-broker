@@ -120,6 +120,7 @@ Unfortunately, most plugins do not support reading credentials from the environm
 
 > [!CAUTION]
 > By passing a vault macro as a parameter, the value of the macro will be visible in `ps`.
+> 
 > This is a potentially unsafe example.
 
 ```
