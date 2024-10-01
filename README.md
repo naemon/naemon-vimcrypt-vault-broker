@@ -101,8 +101,27 @@ ExecStartPost=/usr/bin/bash -c "/usr/bin/systemctl unset-environment NAEMON_VIM_
 
 Using the macros
 ----------------
+Vault macros can then be used like the user macros (`$USER1$`), ex.:
 
-Vault macros can then be used like the user macros, ex.:
+> [!IMPORTANT]  
+> To avoid leakage of sensitive data, it is important to pass values from the vault macros as environment variables. 
+> This is also supported by the [mod-gearman-worker-go](https://github.com/ConSol-Monitoring/mod-gearman-worker-go) implementation.
+> 
+> Make sure to wrap the value macro in single quotes! Otherwise, Naemon might fork an extra shell, which would leak your sensitive information to `ps`.
+
+```
+define command {
+    command_name    check_http
+    command_line    SECURE_PASSWORD='$VAULT$' $USER1$/check_database -u naemon ...
+}
+```
+Unfortunately, most plugins do not support reading credentials from the environment and require specific patching.
+
+
+> [!CAUTION]
+> By passing a vault macro as a parameter, the value of the macro will be visible in `ps`.
+> 
+> This is a potentially unsafe example.
 
 ```
 define command {
