@@ -1,3 +1,9 @@
+naemon-vimvault (1.4.3) UNRELEASED; urgency=low
+
+  * new upstream release
+
+ -- Naemon Development Team <naemon-dev@monitoring-lists.org>  Wed, 19 Feb 2025 08:00:42 +0100
+
 naemon-vimvault (1.4.2) UNRELEASED; urgency=low
 
   * new upstream release
