@@ -1,0 +1,43 @@
+# Naemon VimCrypt Vault Broker
+
+## v1.5.1 (2026-03-20)
+
+- Rebuild for current Naemon broker API (packaging/version bump only).
+
+## v1.5.0 (2026-02-06)
+
+- Rebuild for current Naemon broker API (packaging/version bump only).
+
+## v1.4.4 (2025-06-03)
+
+- Rebuild for current Naemon broker API (packaging/version bump only).
+
+## v1.4.3 (2025-02-19)
+
+- Add security warning about passing vault macros as parameters (values can leak via `ps`).
+
+## v1.4.2 (2024-01-04)
+
+- Replace `naemon.org` references with `naemon.io`.
+
+## v1.4.0 (2022-11-11)
+
+- Packaging/version bump only.
+
+## v1.3.1 (2022-04-28)
+
+- Add systemd documentation for providing the master password.
+- Clear the master password environment variable again after startup.
+- Fix default filename in example configuration.
+
+## v1.3.0 (2021-11-05)
+
+- Add packaging (Debian/RPM spec files) and build requirements.
+- Rename module filename to `naemon_vimvault` and clean up build system.
+- Add support for reading the master password from `NAEMON_VIM_MASTER_PASSWORD`.
+- Support non-numeric vault macro names.
+- Fail fast if no macros were found; improve logging and general cleanup.
+
+## v0.0.1 (2021-06-18)
+
+- Initial release.
