@@ -1,7 +1,7 @@
 AC_PREREQ([2.59])
 AC_INIT([naemon-vimvault], m4_esyscmd([./version.sh]), [naemon-dev@monitoring-lists.org])
 AC_CONFIG_SRCDIR([module.c])
-AM_INIT_AUTOMAKE([-Wall -Werror foreign -Wno-portability])
+AM_INIT_AUTOMAKE([-Wall -Werror foreign -Wno-portability subdir-objects])
 
 AC_CONFIG_HEADERS([config.h])
 

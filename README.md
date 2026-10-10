@@ -31,6 +31,17 @@ Building
   %> make
 ```
 
+Testing
+-------
+
+```bash
+  %> make check                                                  # or: make test
+  %> make clean check CFLAGS="-g -fsanitize=address,undefined"   # with memory checks
+```
+
+The tests use the real libnaemon and vault files encrypted by vim
+(`tests/vim/`, password `test`). Neither naemon nor vim needs to be running.
+
 Usage
 =====
 

@@ -20,7 +20,18 @@ naemonconf_DATA = vimvault.cfg
 
 naemon_vimvault_la_SOURCES = $(naemon_vimvault_sources)
 
-CLEANFILES = $(BUILT_SOURCES)
+check_PROGRAMS = tests/test-vault
+tests_test_vault_SOURCES = tests/test-vault.c
+tests_test_vault_CPPFLAGS = $(AM_CPPFLAGS)
+tests_test_vault_CFLAGS = $(AM_CFLAGS) $(NAEMON_CFLAGS)
+tests_test_vault_LDADD = $(NAEMON_LIBS) -lssl -lcrypto
+TESTS = $(check_PROGRAMS)
+EXTRA_DIST += tests/vim
+
+.PHONY: test
+test: check
+
+CLEANFILES = $(BUILT_SOURCES) vimvault.cfg
 
 vimvault.cfg : % : %.in
 	$(AM_V_GEN) sed \
