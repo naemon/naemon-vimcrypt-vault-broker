@@ -5,6 +5,8 @@
 - Fix out-of-bounds key write and ciphertext over-read, reject truncated vault files.
 - Fix reload with a master password entered at startup, it was overwritten
   or truncated to 31 characters.
+- Add `include`/`include_dir` directives, `max_files` and `warn_no_match` options.
+  Breaking: the last definition of a duplicate macro now wins.
 
 ## v1.5.1 (2026-03-20)
 
