@@ -85,6 +85,7 @@ unsigned char *sha256_key(char *string, char *salt, int salt_len) {
 /* read raw encrypted vault file data */
 int read_raw_vault(char **buffer, int *buffer_size, char **salt) {
 	FILE *fp;
+	char header[12];
 
 	fp = fopen(vault_file, "rb");
 	if(!fp) {
@@ -96,30 +97,19 @@ int read_raw_vault(char **buffer, int *buffer_size, char **salt) {
 	*buffer_size = ftell(fp) - 20; // 12 bytes vimcrypt header, 8 byte salt
 	rewind(fp);
 
-	*buffer = nm_malloc(*buffer_size);
-	if(1 != fread(*buffer , 9, 1 , fp)) {
-		nm_log(NSLOG_INFO_MESSAGE, "Error: cannot read vault file %s: %d - %s", vault_file, errno, strerror(errno));
-		fclose(fp);
-		free(*buffer);
-		return ERROR;
-	}
-	if(strncmp("VimCrypt~", *buffer, 9) != 0) {
+	if(1 != fread(header , 12, 1 , fp) || strncmp("VimCrypt~", header, 9) != 0) {
 		nm_log(NSLOG_INFO_MESSAGE, "Error: file %s is not a vim crypted file.", vault_file);
 		fclose(fp);
-		free(*buffer);
 		return ERROR;
 	}
-
-	if(1 != fread(*buffer , 3, 1 , fp)) {
-		nm_log(NSLOG_INFO_MESSAGE, "Error: cannot read vault file %s: %d - %s", vault_file, errno, strerror(errno));
-		fclose(fp);
-		free(*buffer);
-		return ERROR;
-	}
-	if(strncmp("03!", *buffer, 3) != 0) {
+	if(strncmp("03!", header + 9, 3) != 0) {
 		nm_log(NSLOG_INFO_MESSAGE, "Error: %s uses unsupported crypt method, only blowfish2 is supported.", vault_file);
 		fclose(fp);
-		free(*buffer);
+		return ERROR;
+	}
+	if(*buffer_size < 8) { // 8 byte seed
+		nm_log(NSLOG_INFO_MESSAGE, "Error: vault file %s is truncated.", vault_file);
+		fclose(fp);
 		return ERROR;
 	}
 
@@ -128,12 +118,12 @@ int read_raw_vault(char **buffer, int *buffer_size, char **salt) {
 	if(1 != fread(*salt , 8, 1 , fp)) {
 		nm_log(NSLOG_INFO_MESSAGE, "Error: cannot read vault file %s: %d - %s", vault_file, errno, strerror(errno));
 		fclose(fp);
-		free(*buffer);
 		free(*salt);
 		return ERROR;
 	}
 
 	/* copy the remaining file into the buffer */
+	*buffer = nm_malloc(*buffer_size);
 	if(1 != fread(*buffer , *buffer_size, 1 , fp)) {
 		nm_log(NSLOG_INFO_MESSAGE, "Error: cannot read vault file %s: %d - %s", vault_file, errno, strerror(errno));
 		fclose(fp);
@@ -155,7 +145,6 @@ BF_KEY *bfopen(char*salt, int salt_len) {
 	for(int i = 0; i < 999; i++)
 		key = hexstr32(sha256_key(key, salt, salt_len));
 	key = sha256_key(key, salt, salt_len);
-	key[keylen] = '\0';
 
 	BF_set_key(&bfkey, keylen, key);
 	return(&bfkey);
@@ -169,29 +158,22 @@ void xor_bytes(char *dst, char *b1, char *b2, int size) {
 /* decrypt vault content */
 void decrypt_vault(char **decrypted, char *encrypted, int enc_size, char *salt) {
 	BF_KEY *bfkey;
-	char block0[8], block1[8];
-	int size, offset;
+	char block[8];
+	int size;
 
-	int dec_size = enc_size - 7; // -8 bytes from seed +1 for ending null byte
-	*decrypted = malloc(dec_size);
+	/* the first 8 bytes are the seed, the plaintext is 8 bytes shorter */
+	*decrypted = nm_malloc(enc_size - 7);
 
 	bfkey = bfopen(salt, 8);
 
-	size = enc_size;
-	memcpy(block0, encrypted, 8);
-	memcpy(block1,encrypted + 8, 8);
-	offset = 0;
-	while(size > 8) {
-		BF_encrypt((unsigned int *)block0, bfkey);
-		xor_bytes(block0, block0, block1, 8);
-		size = size - 8;
-		memcpy(*decrypted+offset, block0, size < 8 ? size : 8);
-		offset = offset + 8;
-		memcpy(block0, block1, 8);
-		memcpy(block1, encrypted+offset+8, 8);
+	/* cfb: each plaintext block is the encrypted previous ciphertext block xor the current one */
+	for(int offset = 8; offset < enc_size; offset += 8) {
+		memcpy(block, encrypted + offset - 8, 8);
+		BF_encrypt((unsigned int *)block, bfkey);
+		size = enc_size - offset < 8 ? enc_size - offset : 8;
+		xor_bytes(*decrypted + offset - 8, block, encrypted + offset, size);
 	}
-	(*decrypted)[dec_size-1] = '\0';
-	return;
+	(*decrypted)[enc_size - 8] = '\0';
 }
 
 /* parse vault file and initialize macro store */
@@ -209,14 +191,14 @@ int parse_vault(void) {
 
 	decrypt_vault(&decrypted, encrypted, enc_size, salt);
 	free(encrypted);
+	free(salt);
 
 	macro_store = kvvec_create(0);
 	if(!macro_store) {
 		return ERROR;
 	}
 
-	line = strtok_r(decrypted, "\n", &temp);
-	do {
+	for(line = strtok_r(decrypted, "\n", &temp); line != NULL; line = strtok_r(NULL, "\n", &temp)) {
 		/* skip blank lines and comments */
 		if(strlen(line) < 1)
 			continue;
@@ -254,8 +236,7 @@ int parse_vault(void) {
 		nm_free(value);
 		nm_log(NSLOG_CONFIG_ERROR, "Error: parse error in vault file '%s' at %s", vault_file, line);
 		return ERROR;
-
-	} while ((line = strtok_r(NULL, "\n", &temp)) != NULL);
+	}
 	free(decrypted);
 
 	if(macros_found == 0) {
@@ -264,6 +245,11 @@ int parse_vault(void) {
 	}
 
 	return OK;
+}
+
+/* keep an entered master password for module reloads, the copy lives as long as naemon */
+static void remember_password(const char *password) {
+	kvvec_addkv_str(get_global_store(), master_password_store_key, nm_strdup(password));
 }
 
 /* read master password from stdin (unless already set) and open vault */
@@ -294,7 +280,7 @@ int nebmodule_init(__attribute__((unused)) int flags, char *arg, nebmodule *hand
 			nm_log(NSLOG_INFO_MESSAGE, "Error: no master password given");
 			return ERROR;
 		}
-		kvvec_addkv_str(global_store, master_password_store_key, (char *)mkstr("%s", master_password));
+		remember_password(master_password);
 	}
 
 	if(parse_vault() != OK)
