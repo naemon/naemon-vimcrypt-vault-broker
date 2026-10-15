@@ -31,6 +31,17 @@ Building
   %> make
 ```
 
+Testing
+-------
+
+```bash
+  %> make check                                                  # or: make test
+  %> make clean check CFLAGS="-g -fsanitize=address,undefined"   # with memory checks
+```
+
+The tests use the real libnaemon and vault files encrypted by vim
+(`tests/vim/`, password `test`). Neither naemon nor vim needs to be running.
+
 Usage
 =====
 
@@ -47,6 +58,8 @@ Module arguments are:
 
   - `vault`: sets path to vim crypted file.
   - `password`: sets the master password (not recommended)
+  - `max_files`: maximum number of vault files including includes (default: 64)
+  - `warn_no_match`: `yes` logs a warning when an include wildcard matches nothing (default: `no`)
 
 Environment variables:
 
@@ -68,8 +81,8 @@ supported method) and save with `:X`
 After the initial creation, the file can simply be edited with `vim <file>` and
 vim will automatically ask for the master password.
 
-The vault file must not be empty. The syntax follows the resource.cfg except
-macros are named `$VAULTx$`.
+The vault file must contain at least one comment, macro or include. The syntax
+follows the resource.cfg except macros are named `$VAULTx$`.
 
 etc/naemon/vault.cfg:
 ```
@@ -80,6 +93,33 @@ $VAULT:EXAMPLE$=not only numbers...
 ```
 
 Note: unlike the user macros, macro definitions are _not_ limited to numbers. Human readable names can be used as well.
+
+Including Vault Files
+---------------------
+
+A vault file can include further vault files, encrypted with the same master
+password:
+
+```
+$VAULT:DB_PASS$=default
+include=vault.d/db.cfg
+include=hosts/{common,mylocation}-*.cfg
+include_dir=vault.d/customers
+```
+
+  - `include=` takes a file or a wildcard pattern (`*`, `?`, `[...]`, `{a,b}`).
+    Matches are loaded in sorted order, brace alternatives in the order written.
+  - `include_dir=X` loads all `*.cfg` files directly in `X` (same as `include=X/*.cfg`).
+    Subdirectories are only loaded if an included file includes them.
+  - Relative paths are relative to the directory of the including file.
+  - Included files may include further files.
+  - A pattern which matches nothing is ignored (logged with `warn_no_match=yes`),
+    but a missing plain file name or a missing directory is an error.
+  - Each file can be loaded only once, so loops and overlapping patterns are errors.
+
+Lines are processed top to bottom and an include is loaded where it appears.
+If a macro is defined more than once, the **last definition wins**. (Before
+includes were supported, the first definition won.)
 
 Using with Systemd
 ------------------

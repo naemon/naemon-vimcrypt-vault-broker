@@ -2,6 +2,9 @@
 #include <stdarg.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <ctype.h>
+#include <limits.h>
+#include <glob.h>
 #include <naemon/naemon.h>
 #include <openssl/blowfish.h>
 #include <openssl/sha.h>
@@ -10,18 +13,26 @@ NEB_API_VERSION(CURRENT_NEB_API_VERSION);
 
 enum {
 	VAULT_FILE = 0,
-	VAULT_PW
+	VAULT_PW,
+	MAX_FILES,
+	WARN_NO_MATCH
 };
 
 const char *module_opts[] = {
-	[VAULT_FILE] = "vault",
-	[VAULT_PW]   = "password"
+	[VAULT_FILE]    = "vault",
+	[VAULT_PW]      = "password",
+	[MAX_FILES]     = "max_files",
+	[WARN_NO_MATCH] = "warn_no_match",
+	NULL
 };
 
 const char *master_password_store_key = "master_password_store_key";
 static void *neb_handle = NULL;
 static char *vault_file = NULL;
 static char *master_password = NULL;
+static int max_files = 64;
+static int warn_no_match = FALSE;
+static struct kvvec *loaded_files = NULL;
 struct kvvec *macro_store;
 
 /* handle the macro replacement by looking up macro in the macro store */
@@ -38,7 +49,8 @@ static int handle_vault_macro(int cb, void *_ds) {
 
 /* parse module load arguments */
 int parse_args(char *arg) {
-	char *arg_value;
+	char *arg_value, *end;
+	long number;
 	arg = strtok(arg, " \t");
 	while(arg != NULL) {
 		switch (getsubopt (&arg, (char * const* restrict)module_opts, &arg_value)) {
@@ -47,6 +59,22 @@ int parse_args(char *arg) {
 				break;
 			case VAULT_PW:
 				master_password = arg_value;
+				break;
+			case MAX_FILES:
+				errno = 0;
+				number = arg_value ? strtol(arg_value, &end, 10) : 0;
+				if(number < 1 || number > INT_MAX || errno || *end) {
+					nm_log(NSLOG_INFO_MESSAGE, "Error: max_files must be a positive number");
+					return ERROR;
+				}
+				max_files = number;
+				break;
+			case WARN_NO_MATCH:
+				if(!arg_value || (strcmp(arg_value, "yes") && strcmp(arg_value, "no"))) {
+					nm_log(NSLOG_INFO_MESSAGE, "Error: warn_no_match must be yes or no");
+					return ERROR;
+				}
+				warn_no_match = !strcmp(arg_value, "yes");
 				break;
 			default:
 				nm_log(NSLOG_INFO_MESSAGE, "Error: unknown module argument: %s", arg_value);
@@ -83,8 +111,9 @@ unsigned char *sha256_key(char *string, char *salt, int salt_len) {
 }
 
 /* read raw encrypted vault file data */
-int read_raw_vault(char **buffer, int *buffer_size, char **salt) {
+int read_raw_vault(const char *vault_file, char **buffer, int *buffer_size, char **salt) {
 	FILE *fp;
+	char header[12];
 
 	fp = fopen(vault_file, "rb");
 	if(!fp) {
@@ -96,30 +125,19 @@ int read_raw_vault(char **buffer, int *buffer_size, char **salt) {
 	*buffer_size = ftell(fp) - 20; // 12 bytes vimcrypt header, 8 byte salt
 	rewind(fp);
 
-	*buffer = nm_malloc(*buffer_size);
-	if(1 != fread(*buffer , 9, 1 , fp)) {
-		nm_log(NSLOG_INFO_MESSAGE, "Error: cannot read vault file %s: %d - %s", vault_file, errno, strerror(errno));
-		fclose(fp);
-		free(*buffer);
-		return ERROR;
-	}
-	if(strncmp("VimCrypt~", *buffer, 9) != 0) {
+	if(1 != fread(header , 12, 1 , fp) || strncmp("VimCrypt~", header, 9) != 0) {
 		nm_log(NSLOG_INFO_MESSAGE, "Error: file %s is not a vim crypted file.", vault_file);
 		fclose(fp);
-		free(*buffer);
 		return ERROR;
 	}
-
-	if(1 != fread(*buffer , 3, 1 , fp)) {
-		nm_log(NSLOG_INFO_MESSAGE, "Error: cannot read vault file %s: %d - %s", vault_file, errno, strerror(errno));
-		fclose(fp);
-		free(*buffer);
-		return ERROR;
-	}
-	if(strncmp("03!", *buffer, 3) != 0) {
+	if(strncmp("03!", header + 9, 3) != 0) {
 		nm_log(NSLOG_INFO_MESSAGE, "Error: %s uses unsupported crypt method, only blowfish2 is supported.", vault_file);
 		fclose(fp);
-		free(*buffer);
+		return ERROR;
+	}
+	if(*buffer_size < 8) { // 8 byte seed
+		nm_log(NSLOG_INFO_MESSAGE, "Error: vault file %s is truncated.", vault_file);
+		fclose(fp);
 		return ERROR;
 	}
 
@@ -128,12 +146,12 @@ int read_raw_vault(char **buffer, int *buffer_size, char **salt) {
 	if(1 != fread(*salt , 8, 1 , fp)) {
 		nm_log(NSLOG_INFO_MESSAGE, "Error: cannot read vault file %s: %d - %s", vault_file, errno, strerror(errno));
 		fclose(fp);
-		free(*buffer);
 		free(*salt);
 		return ERROR;
 	}
 
 	/* copy the remaining file into the buffer */
+	*buffer = nm_malloc(*buffer_size);
 	if(1 != fread(*buffer , *buffer_size, 1 , fp)) {
 		nm_log(NSLOG_INFO_MESSAGE, "Error: cannot read vault file %s: %d - %s", vault_file, errno, strerror(errno));
 		fclose(fp);
@@ -155,7 +173,6 @@ BF_KEY *bfopen(char*salt, int salt_len) {
 	for(int i = 0; i < 999; i++)
 		key = hexstr32(sha256_key(key, salt, salt_len));
 	key = sha256_key(key, salt, salt_len);
-	key[keylen] = '\0';
 
 	BF_set_key(&bfkey, keylen, key);
 	return(&bfkey);
@@ -169,101 +186,183 @@ void xor_bytes(char *dst, char *b1, char *b2, int size) {
 /* decrypt vault content */
 void decrypt_vault(char **decrypted, char *encrypted, int enc_size, char *salt) {
 	BF_KEY *bfkey;
-	char block0[8], block1[8];
-	int size, offset;
+	char block[8];
+	int size;
 
-	int dec_size = enc_size - 7; // -8 bytes from seed +1 for ending null byte
-	*decrypted = malloc(dec_size);
+	/* the first 8 bytes are the seed, the plaintext is 8 bytes shorter */
+	*decrypted = nm_malloc(enc_size - 7);
 
 	bfkey = bfopen(salt, 8);
 
-	size = enc_size;
-	memcpy(block0, encrypted, 8);
-	memcpy(block1,encrypted + 8, 8);
-	offset = 0;
-	while(size > 8) {
-		BF_encrypt((unsigned int *)block0, bfkey);
-		xor_bytes(block0, block0, block1, 8);
-		size = size - 8;
-		memcpy(*decrypted+offset, block0, size < 8 ? size : 8);
-		offset = offset + 8;
-		memcpy(block0, block1, 8);
-		memcpy(block1, encrypted+offset+8, 8);
+	/* cfb: each plaintext block is the encrypted previous ciphertext block xor the current one */
+	for(int offset = 8; offset < enc_size; offset += 8) {
+		memcpy(block, encrypted + offset - 8, 8);
+		BF_encrypt((unsigned int *)block, bfkey);
+		size = enc_size - offset < 8 ? enc_size - offset : 8;
+		xor_bytes(*decrypted + offset - 8, block, encrypted + offset, size);
 	}
-	(*decrypted)[dec_size-1] = '\0';
-	return;
+	(*decrypted)[enc_size - 8] = '\0';
 }
 
-/* parse vault file and initialize macro store */
-int parse_vault(void) {
-	char *encrypted, *decrypted, *salt;
-	char *line, *temp, *temp_ptr;
-	char *variable = NULL;
-	char *value = NULL;
-	int macros_found = 0;
-	int enc_size = 0;
+static int parse_vault_file(const char *vault_file);
 
-	if(read_raw_vault(&encrypted, &enc_size, &salt) != OK) {
+/* escape the glob() special characters, so the path only matches itself */
+static char *glob_escape(const char *path) {
+	char *escaped = nm_malloc(2 * strlen(path) + 1), *p = escaped;
+
+	for(; *path != '\0'; path++) {
+		if(strchr("\\*?[]{}", *path))
+			*p++ = '\\';
+		*p++ = *path;
+	}
+	*p = '\0';
+	return escaped;
+}
+
+/* parse all files matching an include/include_dir directive, relative to the including file */
+static int parse_include(const char *vault_file, const char *directive, const char *value) {
+	char *dir, *base, *rel, *pattern;
+	glob_t matches;
+	int rc, result = OK;
+
+	/* include_dir=X includes all *.cfg files in X */
+	nm_asprintf(&rel, "%s%s", value, strcmp(directive, "include_dir") ? "" : "/*.cfg");
+	/* only the value is a pattern, the directory of the including file is literal */
+	dir = nspath_absolute_dirname(vault_file, NULL);
+	base = glob_escape(dir);
+	pattern = nspath_absolute(rel, base);
+
+	rc = glob(pattern, GLOB_BRACE | GLOB_ERR, NULL, &matches);
+	if(rc == 0) {
+		for(size_t i = 0; i < matches.gl_pathc && result == OK; i++)
+			result = parse_vault_file(matches.gl_pathv[i]);
+	} else if(rc == GLOB_NOMATCH && strpbrk(rel, "*?[{")) {
+		/* wildcards are optional */
+		if(warn_no_match)
+			nm_log(NSLOG_INFO_MESSAGE, "Warning: %s=%s in vault file %s matches no files", directive, value, vault_file);
+	} else {
+		nm_log(NSLOG_CONFIG_ERROR, "Error: %s=%s in vault file %s: %s", directive, value, vault_file, rc == GLOB_NOMATCH ? "no such file" : strerror(errno));
+		result = ERROR;
+	}
+
+	globfree(&matches);
+	free(pattern);
+	free(base);
+	free(dir);
+	free(rel);
+	return result;
+}
+
+/* parse a single vault file into the macro store */
+static int parse_vault_file(const char *vault_file) {
+	char *encrypted, *decrypted, *salt, *canonical;
+	char *line, *temp, *variable, *value;
+	struct key_value *kv;
+	int lines_found = 0;
+	int enc_size = 0;
+	int result = OK;
+
+	/* every file only once, and not more than max_files */
+	if((canonical = realpath(vault_file, NULL)) == NULL) {
+		nm_log(NSLOG_INFO_MESSAGE, "Error: cannot read vault file %s: %d - %s", vault_file, errno, strerror(errno));
+		return ERROR;
+	}
+	if(kvvec_fetch(loaded_files, canonical, strlen(canonical)) != NULL) {
+		nm_log(NSLOG_CONFIG_ERROR, "Error: vault file %s is included more than once (duplicate or loop)", canonical);
+		free(canonical);
+		return ERROR;
+	}
+	if(loaded_files->kv_pairs >= max_files) {
+		nm_log(NSLOG_CONFIG_ERROR, "Error: cannot include vault file %s, max_files=%d reached", canonical, max_files);
+		free(canonical);
+		return ERROR;
+	}
+	kvvec_addkv_str(loaded_files, canonical, "");
+
+	if(read_raw_vault(vault_file, &encrypted, &enc_size, &salt) != OK) {
 		return ERROR;
 	}
 
 	decrypt_vault(&decrypted, encrypted, enc_size, salt);
 	free(encrypted);
+	free(salt);
 
-	macro_store = kvvec_create(0);
-	if(!macro_store) {
-		return ERROR;
-	}
-
-	line = strtok_r(decrypted, "\n", &temp);
-	do {
+	for(line = strtok_r(decrypted, "\n", &temp); line != NULL; line = strtok_r(NULL, "\n", &temp)) {
 		/* skip blank lines and comments */
-		if(strlen(line) < 1)
-			continue;
-		if(line[0] == '#' || line[0] == '\x0' || line[0] == '\n' || line[0] == '\r')
-			continue;
 		strip(line);
+		if(line[0] == '\0')
+			continue;
+		lines_found++;
+		if(line[0] == '#')
+			continue;
 
-		/* get the variable name */
-		if ((temp_ptr = my_strtok(line, "=")) == NULL) {
+		/* split into variable and value */
+		variable = line;
+		value = strchr(line, '=');
+		if(value == NULL || value[1] == '\0') {
 			nm_log(NSLOG_CONFIG_ERROR, "Error: parse error in vault file '%s' at %s", vault_file, line);
-			return ERROR;
+			result = ERROR;
+			break;
 		}
-		variable = (char *)nm_strdup(temp_ptr);
+		*value++ = '\0';
 
-		/* get the value */
-		if ((temp_ptr = my_strtok(NULL, "\n")) == NULL) {
-			nm_log(NSLOG_CONFIG_ERROR, "Error: parse error in vault file '%s' at %s", vault_file, line);
-			return ERROR;
-		}
-		value = nm_strdup(temp_ptr);
-
-		/* check for macro declarations */
-		if (variable[0] == '$' && variable[strlen(variable) - 1] == '$') {
-			/* $VAULTx$ macro declarations */
-			if (strstr(variable, "$VAULT") == variable  && strlen(variable) > 6) {
-				variable[strlen(variable) - 1] = '\0';
-				kvvec_addkv_str(macro_store, strdup(variable+1), strdup(value));
-				nm_free(variable);
-				nm_free(value);
-				macros_found++;
-				continue;
+		/* $VAULTx$ macro declarations, a later definition replaces an earlier one */
+		if(strncmp(variable, "$VAULT", 6) == 0 && strlen(variable) > 6 && variable[strlen(variable) - 1] == '$') {
+			variable[strlen(variable) - 1] = '\0';
+			if((kv = kvvec_fetch(macro_store, variable + 1, strlen(variable + 1))) != NULL) {
+				free(kv->value);
+				kv->value = strdup(value);
+				kv->value_len = strlen(value);
+			} else {
+				kvvec_addkv_str(macro_store, strdup(variable + 1), strdup(value));
 			}
+			continue;
 		}
-		nm_free(variable);
-		nm_free(value);
-		nm_log(NSLOG_CONFIG_ERROR, "Error: parse error in vault file '%s' at %s", vault_file, line);
-		return ERROR;
 
-	} while ((line = strtok_r(NULL, "\n", &temp)) != NULL);
+		/* include directives, like macros without blanks around the = */
+		if((strcmp(variable, "include") && strcmp(variable, "include_dir")) || isspace((unsigned char)value[0])) {
+			nm_log(NSLOG_CONFIG_ERROR, "Error: parse error in vault file '%s' at %s", vault_file, line);
+			result = ERROR;
+			break;
+		}
+		if(parse_include(vault_file, variable, value) != OK) {
+			result = ERROR;
+			break;
+		}
+	}
 	free(decrypted);
 
-	if(macros_found == 0) {
+	if(result == OK && lines_found == 0) {
 		nm_log(NSLOG_CONFIG_ERROR, "Error: no macros found in %s, wrong password?", vault_file);
 		return ERROR;
 	}
 
-	return OK;
+	return result;
+}
+
+/* parse vault file and its includes and initialize macro store, all or nothing */
+int parse_vault(void) {
+	char *path = nspath_absolute(vault_file, NULL);
+	int result = ERROR;
+
+	macro_store = kvvec_create(0);
+	loaded_files = kvvec_create(0);
+	if(macro_store != NULL && loaded_files != NULL)
+		result = parse_vault_file(path);
+
+	kvvec_destroy(loaded_files, KVVEC_FREE_KEYS);
+	loaded_files = NULL;
+	free(path);
+	if(result != OK) {
+		kvvec_destroy(macro_store, KVVEC_FREE_ALL);
+		macro_store = NULL;
+	}
+	return result;
+}
+
+/* keep an entered master password for module reloads, the copy lives as long as naemon */
+static void remember_password(const char *password) {
+	kvvec_addkv_str(get_global_store(), master_password_store_key, nm_strdup(password));
 }
 
 /* read master password from stdin (unless already set) and open vault */
@@ -294,7 +393,7 @@ int nebmodule_init(__attribute__((unused)) int flags, char *arg, nebmodule *hand
 			nm_log(NSLOG_INFO_MESSAGE, "Error: no master password given");
 			return ERROR;
 		}
-		kvvec_addkv_str(global_store, master_password_store_key, (char *)mkstr("%s", master_password));
+		remember_password(master_password);
 	}
 
 	if(parse_vault() != OK)

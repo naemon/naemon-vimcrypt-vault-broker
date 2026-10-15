@@ -24,6 +24,13 @@
 /missing
 /stamp-h1
 /ar-lib
+/test-driver
+/test-suite.log
+/tests/test-vault
+/tests/*.log
+/tests/*.trs
+/tests/.deps
+/tests/.dirstamp
 vimvault.cfg
 
 # Prerequisites
