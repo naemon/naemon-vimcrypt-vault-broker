@@ -1,6 +1,6 @@
 # Naemon VimCrypt Vault Broker
 
-## Unreleased
+## v1.6.0 (2026-11-16)
 
 - Fix out-of-bounds key write and ciphertext over-read, reject truncated vault files.
 - Fix reload with a master password entered at startup, it was overwritten
